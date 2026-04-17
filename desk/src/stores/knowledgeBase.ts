@@ -3,15 +3,18 @@ import { createResource } from "frappe-ui";
 // Title
 export const newArticle = createResource({
   url: "frappe.client.insert",
-  makeParams({ title, content, category }) {
-    return {
-      doc: {
-        doctype: "HD Article",
-        title,
-        content,
-        category,
-      },
+  makeParams({ title, content, category, visibility, visible_to }) {
+    const doc: any = {
+      doctype: "HD Article",
+      title,
+      content,
+      category,
+      visibility: visibility || "Public",
     };
+    if (visibility === "Restricted" && visible_to?.length) {
+      doc.visible_to = visible_to.map((org: string) => ({ organization: org }));
+    }
+    return { doc };
   },
   validate({ doc }) {
     if (!doc.title) throw "Title is required";

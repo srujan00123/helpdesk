@@ -34,6 +34,50 @@
             />
           </div>
         </div>
+        <!-- Visibility Controls -->
+        <div class="flex flex-col gap-2 border rounded-lg p-3 bg-surface-gray-2">
+          <div class="flex items-center gap-3">
+            <span class="text-sm font-medium text-ink-gray-7 w-20">{{ __('Visibility') }}</span>
+            <FormControl
+              type="select"
+              :options="[
+                { label: __('Public'), value: 'Public' },
+                { label: __('Restricted'), value: 'Restricted' },
+              ]"
+              v-model="visibility"
+              size="sm"
+              class="w-40"
+            />
+          </div>
+          <div v-if="visibility === 'Restricted'" class="flex items-start gap-3">
+            <span class="text-sm font-medium text-ink-gray-7 w-20 pt-1.5">{{ __('Visible To') }}</span>
+            <div class="flex-1">
+              <div class="flex flex-wrap gap-1.5 mb-2" v-if="selectedOrgs.length">
+                <Badge
+                  v-for="org in selectedOrgs"
+                  :key="org"
+                  :label="org"
+                  variant="outline"
+                  size="md"
+                >
+                  <template #suffix>
+                    <button @click="removeOrg(org)" class="ml-1 text-ink-gray-5 hover:text-ink-gray-8">
+                      <LucideX class="w-3 h-3" />
+                    </button>
+                  </template>
+                </Badge>
+              </div>
+              <Link
+                doctype="HD Organization"
+                :placeholder="__('Add organization...')"
+                :value="''"
+                @change="(val: string) => addOrg(val)"
+                size="sm"
+              />
+            </div>
+          </div>
+        </div>
+
         <!-- Title -->
         <textarea
           class="w-full resize-none border-0 text-3xl font-bold placeholder-ink-gray-3 p-0 pb-3 border-b border-gray-200 focus:ring-0 focus:border-gray-200"
@@ -71,7 +115,9 @@
 
 <script setup lang="ts">
 import {
+  Badge,
   Breadcrumbs,
+  FormControl,
   TextEditor,
   TextEditorFixedMenu,
   toast,
@@ -100,6 +146,18 @@ const { isManager } = useAuthStore();
 
 const title = ref("");
 const content = ref("");
+const visibility = ref("Public");
+const selectedOrgs = ref<string[]>([]);
+
+function addOrg(org: string) {
+  if (org && !selectedOrgs.value.includes(org)) {
+    selectedOrgs.value.push(org);
+  }
+}
+
+function removeOrg(org: string) {
+  selectedOrgs.value = selectedOrgs.value.filter((o) => o !== org);
+}
 
 const props = defineProps({
   id: {
@@ -113,7 +171,13 @@ const categoryName = computed(() => (route.query.title as string) || "");
 
 function handleCreateArticle() {
   newArticle.submit(
-    { title: title.value, content: content.value, category: categoryId.value },
+    {
+      title: title.value,
+      content: content.value,
+      category: categoryId.value,
+      visibility: visibility.value,
+      visible_to: visibility.value === "Restricted" ? selectedOrgs.value : [],
+    },
     {
       onSuccess: (article: Article) => {
         toast.success(__("Article created successfully."));

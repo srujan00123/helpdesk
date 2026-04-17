@@ -159,6 +159,69 @@
           </div>
         </div>
 
+        <!-- Visibility Controls (Agent Edit Mode) -->
+        <div
+          v-if="editable && !isCustomerPortal"
+          class="flex flex-col gap-2 border rounded-lg p-3 bg-surface-gray-2"
+        >
+          <div class="flex items-center gap-3">
+            <span class="text-sm font-medium text-ink-gray-7 w-20">{{ __('Visibility') }}</span>
+            <FormControl
+              type="select"
+              :options="[
+                { label: __('Public'), value: 'Public' },
+                { label: __('Restricted'), value: 'Restricted' },
+              ]"
+              v-model="visibility"
+              size="sm"
+              class="w-40"
+            />
+          </div>
+          <div v-if="visibility === 'Restricted'" class="flex items-start gap-3">
+            <span class="text-sm font-medium text-ink-gray-7 w-20 pt-1.5">{{ __('Visible To') }}</span>
+            <div class="flex-1">
+              <div class="flex flex-wrap gap-1.5 mb-2" v-if="selectedOrgs.length">
+                <Badge
+                  v-for="org in selectedOrgs"
+                  :key="org"
+                  :label="org"
+                  variant="outline"
+                  size="md"
+                >
+                  <template #suffix>
+                    <button @click="removeOrg(org)" class="ml-1 text-ink-gray-5 hover:text-ink-gray-8">
+                      <LucideX class="w-3 h-3" />
+                    </button>
+                  </template>
+                </Badge>
+              </div>
+              <Link
+                doctype="HD Organization"
+                :placeholder="__('Add organization...')"
+                :value="''"
+                @change="(val: string) => addOrg(val)"
+                size="sm"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Visibility Badge (View Mode) -->
+        <div
+          v-if="!editable && !isCustomerPortal && article.data?.visibility === 'Restricted'"
+          class="flex items-center gap-2"
+        >
+          <Badge variant="subtle" theme="blue" size="sm">
+            <template #prefix>
+              <LucideLock class="w-3 h-3" />
+            </template>
+            {{ __('Restricted') }}
+          </Badge>
+          <span class="text-xs text-ink-gray-5">
+            {{ selectedOrgs.join(', ') }}
+          </span>
+        </div>
+
         <!-- Article Content -->
         <TextEditor
           ref="editorRef"
@@ -278,6 +341,7 @@ import { useRoute, useRouter } from "vue-router";
 import IconDot from "~icons/lucide/dot";
 import IconMoreHorizontal from "~icons/lucide/more-horizontal";
 import { __ } from "@/translation";
+import { useOnboarding, Link } from "frappe-ui/frappe";
 import {
   ThumbsDownIcon,
   ThumbsUpIcon,
@@ -343,6 +407,19 @@ const content = ref("");
 const title = ref("");
 const feedback = ref<FeedbackAction>();
 
+const visibility = ref("Public");
+const selectedOrgs = ref<string[]>([]);
+
+function addOrg(org: string) {
+  if (org && !selectedOrgs.value.includes(org)) {
+    selectedOrgs.value.push(org);
+  }
+}
+
+function removeOrg(org: string) {
+  selectedOrgs.value = selectedOrgs.value.filter((o) => o !== org);
+}
+
 const titleRef = ref(null);
 watch(
   () => titleRef.value,
@@ -369,10 +446,14 @@ const article: Resource<Article> = createResource({
     name: props.articleId,
   },
   auto: true,
-  onSuccess: (data: Article) => {
+  onSuccess: (data: any) => {
     content.value = data.content;
     title.value = data.title;
     feedback.value = data.feedback;
+    visibility.value = data.visibility || "Public";
+    if (data.visible_to) {
+      selectedOrgs.value = data.visible_to.map((o: any) => o.organization);
+    }
     if (isCustomerPortal.value) {
       capture("article_viewed", {
         data: {
@@ -473,6 +554,8 @@ function handleDiscard() {
   isDirty.value = false;
   title.value = article.data.title;
   content.value = article.data.content;
+  visibility.value = article.data.visibility || "Public";
+  selectedOrgs.value = (article.data.visible_to || []).map((o: any) => o.organization);
   const original = addLinksToHeadings(article.data.content);
   textEditorContentWithIDs.value = null;
   nextTick(() => {
@@ -517,6 +600,11 @@ function handleArticleUpdate() {
       fieldname: {
         content: content.value,
         title: title.value,
+        visibility: visibility.value,
+        visible_to:
+          visibility.value === "Restricted"
+            ? selectedOrgs.value.map((org) => ({ organization: org }))
+            : [],
       },
     },
     {
@@ -590,10 +678,15 @@ watch(articleStats.data, () => {
   }
 });
 
-watch([() => content.value, () => title.value], ([newContent, newTitle]) => {
-  isDirty.value =
-    newContent !== article.data.content || newTitle !== article.data.title;
-});
+watch(
+  [() => content.value, () => title.value, () => visibility.value, () => selectedOrgs.value],
+  ([newContent, newTitle]) => {
+    isDirty.value =
+      newContent !== article.data.content || newTitle !== article.data.title ||
+      visibility.value !== (article.data.visibility || "Public");
+  },
+  { deep: true }
+);
 
 const editorClass = computed(() => {
   return [
