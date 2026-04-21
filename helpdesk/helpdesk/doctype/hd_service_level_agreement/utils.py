@@ -13,9 +13,24 @@ def get_sla(ticket: Document) -> Document:
     """
     Get Service Level Agreement for `ticket`
 
+    Resolution order:
+        1. HD Organization.default_sla (if ticket has an organization)
+        2. Enabled, non-default SLA matching priority + condition
+        3. Default SLA
+
     :param doc: Ticket to use
     :return: Applicable SLA
     """
+    # Path 1: organization's default SLA wins
+    if getattr(ticket, "organization", None):
+        org_sla = frappe.db.get_value(
+            "HD Organization", ticket.organization, "default_sla"
+        )
+        if org_sla and frappe.db.get_value(
+            DOCTYPE, org_sla, "enabled"
+        ):
+            return frappe._dict(name=org_sla)
+
     QBSla = frappe.qb.DocType(DOCTYPE)
     QBPriority = frappe.qb.DocType("HD Service Level Priority")
     now = now_datetime()

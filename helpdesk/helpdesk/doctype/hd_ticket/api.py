@@ -138,7 +138,7 @@ def get_one(name: str | int, is_customer_portal: bool = False):
 
 
 def get_meta(template: str):
-    default_fields = ["ticket_type", "agent_group", "priority", "customer"]
+    default_fields = ["ticket_type", "agent_group", "priority", "customer", "organization"]
     DocField = frappe.qb.DocType("DocField")
 
     fields = (
@@ -166,7 +166,63 @@ def get_customer_criteria():
     customer = get_customer(user)
     for c in customer:
         conditions.append(QBTicket.customer == c)
+
+    # Also show tickets from the same organization
+    user_orgs = _get_user_organizations(user)
+    for org in user_orgs:
+        conditions.append(QBTicket.organization == org)
+
     return Criterion.any(conditions)
+
+
+def _get_user_organizations(user: str) -> list[str]:
+    """Resolve HD Organizations for a user via Contact → Customer → Organization."""
+    contacts = frappe.get_all(
+        "Contact Email",
+        filters={"email_id": user, "parenttype": "Contact"},
+        pluck="parent",
+    )
+    if not contacts:
+        return []
+
+    orgs = set()
+
+    # Path 1: Contact → HD Organization (via contacts child table)
+    direct_orgs = frappe.get_all(
+        "HD Organization",
+        filters=[["HD Organization Contact Item", "contact", "in", contacts]],
+        pluck="name",
+    )
+    orgs.update(direct_orgs)
+
+    # Path 2: Contact → HD Customer → organization
+    customers = frappe.get_all(
+        "Dynamic Link",
+        filters={
+            "parenttype": "Contact",
+            "parent": ["in", contacts],
+            "link_doctype": "HD Customer",
+        },
+        pluck="link_name",
+    )
+    if customers:
+        customer_orgs = frappe.get_all(
+            "HD Customer",
+            filters={"name": ["in", customers], "organization": ["is", "set"]},
+            pluck="organization",
+        )
+        orgs.update(customer_orgs)
+
+    # Path 3: email domain → HD Organization.email_domain
+    if "@" in user:
+        domain = user.split("@")[1].lower()
+        domain_org = frappe.db.get_value(
+            "HD Organization", {"email_domain": domain}, "name"
+        )
+        if domain_org:
+            orgs.add(domain_org)
+
+    return list(orgs)
 
 
 def get_assignee(_assign: str):

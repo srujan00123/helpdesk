@@ -89,6 +89,7 @@ class HDTicket(Document):
 
         self.set_contact()
         self.set_customer()
+        self.set_organization()
 
     def validate(self):
         self.validate_feedback()
@@ -282,6 +283,32 @@ class HDTicket(Document):
             # let agent assign the customer when one contact has more than one customer
             if len(customer) == 1:
                 self.customer = customer[0]
+
+    def set_organization(self):
+        """
+        Auto-classify ticket into an HD Organization based on:
+        1. Customer's organization (if customer is set and has one)
+        2. Sender email domain → HD Organization.email_domain
+        """
+        if self.organization:
+            return
+
+        # Path 1: from HD Customer.organization
+        if self.customer:
+            org = frappe.db.get_value("HD Customer", self.customer, "organization")
+            if org:
+                self.organization = org
+                return
+
+        # Path 2: from sender email domain → HD Organization.email_domain
+        email = parseaddr(self.raised_by or "")[1]
+        if email and "@" in email:
+            domain = email.split("@")[1].lower()
+            org = frappe.db.get_value(
+                "HD Organization", {"email_domain": domain}, "name"
+            )
+            if org:
+                self.organization = org
 
     def set_priority(self):
         if self.priority:
@@ -1058,6 +1085,13 @@ class HDTicket(Document):
                 "width": "10rem",
             },
             {
+                "label": "Organization",
+                "type": "Link",
+                "key": "organization",
+                "options": "HD Organization",
+                "width": "10rem",
+            },
+            {
                 "label": "Contact",
                 "type": "Link",
                 "key": "contact",
@@ -1138,6 +1172,7 @@ class HDTicket(Document):
             "priority",
             "ticket_type",
             "agent_group",
+            "organization",
             "contact",
             "agreement_status",
             "response_by",
@@ -1201,6 +1236,12 @@ def has_permission(doc, user=None):
     ):
         return True
 
+    # Allow access if user belongs to the same organization
+    if doc.organization:
+        from helpdesk.helpdesk.doctype.hd_ticket.api import _get_user_organizations
+        if doc.organization in _get_user_organizations(user):
+            return True
+
     if not is_agent(user):
         return False
 
@@ -1253,6 +1294,14 @@ def permission_query(user):
     for c in customer:
         query += " OR `tabHD Ticket`.customer={customer}".format(
             customer=frappe.db.escape(c)
+        )
+
+    # Include tickets from user's organization
+    from helpdesk.helpdesk.doctype.hd_ticket.api import _get_user_organizations
+    user_orgs = _get_user_organizations(user)
+    for org in user_orgs:
+        query += " OR `tabHD Ticket`.organization={org}".format(
+            org=frappe.db.escape(org)
         )
 
     if not is_agent(user):
