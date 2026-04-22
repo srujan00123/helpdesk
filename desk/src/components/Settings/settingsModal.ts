@@ -2,7 +2,6 @@ import { computed, h, markRaw, ref } from "vue";
 import Agents from "./Agents.vue";
 import EmailConfig from "./EmailConfig.vue";
 import TeamsConfig from "./Teams/TeamsConfig.vue";
-import Organizations from "./Organizations/Organizations.vue";
 import Sla from "./Sla/Sla.vue";
 import HolidayList from "./Holiday/Holiday.vue";
 import FieldDependencyConfig from "./FieldDependency/FieldDependencyConfig.vue";
@@ -14,7 +13,6 @@ import LucideUserPlus from "~icons/lucide/user-plus";
 import LucideUsers from "~icons/lucide/users";
 import ShieldCheck from "~icons/lucide/shield-check";
 import Briefcase from "~icons/lucide/briefcase";
-import Building from "~icons/lucide/building";
 import AssignmentRules from "./Assignment Rules/AssignmentRules.vue";
 import Settings from "~icons/lucide/settings-2";
 import { FieldDependencyIcon, PhoneIcon } from "@/components/icons";
@@ -95,12 +93,6 @@ export const tabs = computed(() => {
           condition: () => auth.isAdmin || auth.isManager,
         },
         {
-          label: __("Organizations"),
-          icon: markRaw(Building),
-          component: markRaw(Organizations),
-          condition: () => auth.isAdmin || auth.isManager,
-        },
-        {
           label: __("SLA Policies"),
           icon: markRaw(ShieldCheck),
           component: markRaw(Sla),
@@ -169,7 +161,6 @@ type TabName =
   | "Agents"
   | "Invite Agents"
   | "Teams"
-  | "Organizations"
   | "SLA Policies"
   | "Business Holidays"
   | "Assignment Rules"

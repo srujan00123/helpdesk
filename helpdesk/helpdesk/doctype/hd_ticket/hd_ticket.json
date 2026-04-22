@@ -55,7 +55,7 @@
   "contact",
   "customer",
   "email_account",
-  "organization",
+  "party",
   "column_break_16",
   "via_customer_portal",
   "attachment",
@@ -337,12 +337,12 @@
    "options": "Email Account"
   },
   {
-   "fieldname": "organization",
+   "description": "Billable customer (ERPNext), auto-classified from sender email domain.",
+   "fieldname": "party",
    "fieldtype": "Link",
    "in_standard_filter": 1,
-   "label": "Organization",
-   "options": "HD Organization",
-   "read_only": 1
+   "label": "Customer",
+   "options": "Customer"
   },
   {
    "fieldname": "column_break_16",
@@ -536,7 +536,7 @@
  "quick_entry": 1,
  "recipient_account_field": "email_account",
  "row_format": "Dynamic",
- "search_fields": "status,subject,raised_by,organization",
+ "search_fields": "status,subject,raised_by,party",
  "sender_field": "raised_by",
  "show_title_field_in_link": 1,
  "sort_field": "modified",

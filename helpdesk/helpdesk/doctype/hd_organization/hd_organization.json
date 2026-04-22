@@ -8,8 +8,6 @@
  "engine": "InnoDB",
  "field_order": [
   "organization_name",
-  "email_domain",
-  "default_sla",
   "contacts"
  ],
  "fields": [
@@ -18,21 +16,6 @@
    "fieldtype": "Data",
    "label": "Name",
    "unique": 1
-  },
-  {
-   "description": "Email domain used to auto-classify tickets, e.g. bmp.com",
-   "fieldname": "email_domain",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "label": "Email Domain",
-   "unique": 1
-  },
-  {
-   "description": "If set, tickets assigned to this organization will use this SLA by default.",
-   "fieldname": "default_sla",
-   "fieldtype": "Link",
-   "label": "Default SLA",
-   "options": "HD Service Level Agreement"
   },
   {
    "fieldname": "contacts",

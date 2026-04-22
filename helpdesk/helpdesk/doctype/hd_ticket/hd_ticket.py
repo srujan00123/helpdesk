@@ -89,7 +89,7 @@ class HDTicket(Document):
 
         self.set_contact()
         self.set_customer()
-        self.set_organization()
+        self.set_party()
 
     def validate(self):
         self.validate_feedback()
@@ -284,31 +284,39 @@ class HDTicket(Document):
             if len(customer) == 1:
                 self.customer = customer[0]
 
-    def set_organization(self):
+    def set_party(self):
         """
-        Auto-classify ticket into an HD Organization based on:
-        1. Customer's organization (if customer is set and has one)
-        2. Sender email domain → HD Organization.email_domain
+        Auto-classify ticket to a billable party (ERPNext Customer) via:
+        1. Contact's Dynamic Link → Customer
+        2. Sender email domain → Customer.email_domain (custom field)
         """
-        if self.organization:
+        if self.party:
+            return
+        if not frappe.db.exists("DocType", "Customer"):
             return
 
-        # Path 1: from HD Customer.organization
-        if self.customer:
-            org = frappe.db.get_value("HD Customer", self.customer, "organization")
-            if org:
-                self.organization = org
+        # Path 1: Contact → Dynamic Link → Customer
+        if self.contact:
+            party = frappe.db.get_value(
+                "Dynamic Link",
+                {
+                    "parenttype": "Contact",
+                    "parent": self.contact,
+                    "link_doctype": "Customer",
+                },
+                "link_name",
+            )
+            if party:
+                self.party = party
                 return
 
-        # Path 2: from sender email domain → HD Organization.email_domain
+        # Path 2: sender email domain → Customer.email_domain
         email = parseaddr(self.raised_by or "")[1]
         if email and "@" in email:
             domain = email.split("@")[1].lower()
-            org = frappe.db.get_value(
-                "HD Organization", {"email_domain": domain}, "name"
-            )
-            if org:
-                self.organization = org
+            party = frappe.db.get_value("Customer", {"email_domain": domain}, "name")
+            if party:
+                self.party = party
 
     def set_priority(self):
         if self.priority:
@@ -1085,10 +1093,10 @@ class HDTicket(Document):
                 "width": "10rem",
             },
             {
-                "label": "Organization",
+                "label": "Customer",
                 "type": "Link",
-                "key": "organization",
-                "options": "HD Organization",
+                "key": "party",
+                "options": "Customer",
                 "width": "10rem",
             },
             {
@@ -1172,7 +1180,7 @@ class HDTicket(Document):
             "priority",
             "ticket_type",
             "agent_group",
-            "organization",
+            "party",
             "contact",
             "agreement_status",
             "response_by",
@@ -1236,10 +1244,10 @@ def has_permission(doc, user=None):
     ):
         return True
 
-    # Allow access if user belongs to the same organization
-    if doc.organization:
-        from helpdesk.helpdesk.doctype.hd_ticket.api import _get_user_organizations
-        if doc.organization in _get_user_organizations(user):
+    # Allow access if user belongs to the same billable customer (party)
+    if doc.party:
+        from helpdesk.helpdesk.doctype.hd_ticket.api import _get_user_parties
+        if doc.party in _get_user_parties(user):
             return True
 
     if not is_agent(user):
@@ -1296,12 +1304,12 @@ def permission_query(user):
             customer=frappe.db.escape(c)
         )
 
-    # Include tickets from user's organization
-    from helpdesk.helpdesk.doctype.hd_ticket.api import _get_user_organizations
-    user_orgs = _get_user_organizations(user)
-    for org in user_orgs:
-        query += " OR `tabHD Ticket`.organization={org}".format(
-            org=frappe.db.escape(org)
+    # Include tickets from user's customer accounts (party)
+    from helpdesk.helpdesk.doctype.hd_ticket.api import _get_user_parties
+    user_parties = _get_user_parties(user)
+    for party in user_parties:
+        query += " OR `tabHD Ticket`.party={party}".format(
+            party=frappe.db.escape(party)
         )
 
     if not is_agent(user):

@@ -138,7 +138,7 @@ def get_one(name: str | int, is_customer_portal: bool = False):
 
 
 def get_meta(template: str):
-    default_fields = ["ticket_type", "agent_group", "priority", "customer", "organization"]
+    default_fields = ["ticket_type", "agent_group", "priority", "customer", "party"]
     DocField = frappe.qb.DocType("DocField")
 
     fields = (
@@ -167,62 +167,49 @@ def get_customer_criteria():
     for c in customer:
         conditions.append(QBTicket.customer == c)
 
-    # Also show tickets from the same organization
-    user_orgs = _get_user_organizations(user)
-    for org in user_orgs:
-        conditions.append(QBTicket.organization == org)
+    # Also show tickets from the same billable customer (party)
+    for party in _get_user_parties(user):
+        conditions.append(QBTicket.party == party)
 
     return Criterion.any(conditions)
 
 
-def _get_user_organizations(user: str) -> list[str]:
-    """Resolve HD Organizations for a user via Contact → Customer → Organization."""
+def _get_user_parties(user: str) -> list[str]:
+    """Resolve ERPNext Customer(s) for a user via:
+    1. Contact → Dynamic Link → Customer
+    2. Email domain → Customer.email_domain
+    """
+    if not frappe.db.exists("DocType", "Customer"):
+        return []
+
+    parties = set()
+
     contacts = frappe.get_all(
         "Contact Email",
         filters={"email_id": user, "parenttype": "Contact"},
         pluck="parent",
     )
-    if not contacts:
-        return []
-
-    orgs = set()
-
-    # Path 1: Contact → HD Organization (via contacts child table)
-    direct_orgs = frappe.get_all(
-        "HD Organization",
-        filters=[["HD Organization Contact Item", "contact", "in", contacts]],
-        pluck="name",
-    )
-    orgs.update(direct_orgs)
-
-    # Path 2: Contact → HD Customer → organization
-    customers = frappe.get_all(
-        "Dynamic Link",
-        filters={
-            "parenttype": "Contact",
-            "parent": ["in", contacts],
-            "link_doctype": "HD Customer",
-        },
-        pluck="link_name",
-    )
-    if customers:
-        customer_orgs = frappe.get_all(
-            "HD Customer",
-            filters={"name": ["in", customers], "organization": ["is", "set"]},
-            pluck="organization",
+    if contacts:
+        customers = frappe.get_all(
+            "Dynamic Link",
+            filters={
+                "parenttype": "Contact",
+                "parent": ["in", contacts],
+                "link_doctype": "Customer",
+            },
+            pluck="link_name",
         )
-        orgs.update(customer_orgs)
+        parties.update(customers)
 
-    # Path 3: email domain → HD Organization.email_domain
     if "@" in user:
         domain = user.split("@")[1].lower()
-        domain_org = frappe.db.get_value(
-            "HD Organization", {"email_domain": domain}, "name"
+        domain_match = frappe.db.get_value(
+            "Customer", {"email_domain": domain}, "name"
         )
-        if domain_org:
-            orgs.add(domain_org)
+        if domain_match:
+            parties.add(domain_match)
 
-    return list(orgs)
+    return list(parties)
 
 
 def get_assignee(_assign: str):

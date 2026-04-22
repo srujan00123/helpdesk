@@ -83,7 +83,7 @@ const activities = inject(ActivitiesSymbol);
 const { getFields, getField } = getMeta("HD Ticket");
 const { notifyTicketUpdate } = useNotifyTicketUpdate(ticket.value?.name);
 
-// ticket_type, priority, customer, organization, agent_group
+// ticket_type, priority, customer, party, agent_group
 const coreFields = computed(() => {
   // TODO: to confirm whether customizations should apply to core fields as well
   const fieldsMeta = getFields();
@@ -92,8 +92,7 @@ const coreFields = computed(() => {
   }
   const _coreFields = [
     { group: true, fields: [getField("ticket_type"), getField("priority")] },
-    { group: false, fields: [getField("customer")] },
-    { group: false, fields: [getField("organization")] },
+    { group: false, fields: [getField("party")] },
     { group: true, fields: [getField("agent_group")] },
   ];
 
@@ -125,7 +124,7 @@ const customFields = computed(() => {
     "ticket_type",
     "priority",
     "customer",
-    "organization",
+    "party",
     "agent_group",
     "subject",
     "status",

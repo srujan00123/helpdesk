@@ -3,48 +3,54 @@ import frappe
 
 def execute():
     """
-    Backfill `organization` on existing HD Ticket rows.
+    Backfill `party` (ERPNext Customer) on existing HD Ticket rows.
 
     Resolution order per ticket:
-        1. HD Customer.organization (if ticket.customer is set)
-        2. Sender email domain -> HD Organization.email_domain
+        1. Contact.Dynamic Link -> Customer
+        2. Sender email domain -> Customer.email_domain
     """
-    if not frappe.db.has_column("HD Ticket", "organization"):
+    if not frappe.db.has_column("HD Ticket", "party"):
+        return
+    if not frappe.db.exists("DocType", "Customer"):
         return
 
-    _backfill_from_customer()
+    _backfill_from_contact()
     _backfill_from_email_domain()
 
 
-def _backfill_from_customer():
+def _backfill_from_contact():
     frappe.db.sql(
         """
         UPDATE `tabHD Ticket` t
-        INNER JOIN `tabHD Customer` c ON t.customer = c.name
-        SET t.organization = c.organization
-        WHERE (t.organization IS NULL OR t.organization = '')
-          AND c.organization IS NOT NULL
-          AND c.organization != ''
+        INNER JOIN `tabDynamic Link` dl
+            ON dl.parent = t.contact
+           AND dl.parenttype = 'Contact'
+           AND dl.link_doctype = 'Customer'
+        SET t.party = dl.link_name
+        WHERE (t.party IS NULL OR t.party = '')
+          AND t.contact IS NOT NULL
         """
     )
 
 
 def _backfill_from_email_domain():
-    orgs = frappe.get_all(
-        "HD Organization",
+    if not frappe.db.has_column("Customer", "email_domain"):
+        return
+    customers = frappe.get_all(
+        "Customer",
         filters=[["email_domain", "is", "set"]],
         fields=["name", "email_domain"],
     )
-    for org in orgs:
-        domain = (org.email_domain or "").lower().strip()
+    for c in customers:
+        domain = (c.email_domain or "").lower().strip()
         if not domain:
             continue
         frappe.db.sql(
             """
             UPDATE `tabHD Ticket`
-            SET organization = %s
-            WHERE (organization IS NULL OR organization = '')
+            SET party = %s
+            WHERE (party IS NULL OR party = '')
               AND LOWER(SUBSTRING_INDEX(raised_by, '@', -1)) = %s
             """,
-            (org.name, domain),
+            (c.name, domain),
         )
