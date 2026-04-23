@@ -177,7 +177,8 @@ def get_customer_criteria():
 def _get_user_parties(user: str) -> list[str]:
     """Resolve ERPNext Customer(s) for a user via:
     1. Contact → Dynamic Link → Customer
-    2. Email domain → Customer.email_domain
+    2. Customer.portal_users manual mapping
+    3. Email domain → Customer.email_domain
     """
     if not frappe.db.exists("DocType", "Customer"):
         return []
@@ -200,6 +201,14 @@ def _get_user_parties(user: str) -> list[str]:
             pluck="link_name",
         )
         parties.update(customers)
+
+    # Path 2: manually mapped portal users on Customer.portal_users
+    portal_user_parties = frappe.get_all(
+        "Portal User",
+        filters={"parenttype": "Customer", "user": user},
+        pluck="parent",
+    )
+    parties.update(portal_user_parties)
 
     if "@" in user:
         domain = user.split("@")[1].lower()

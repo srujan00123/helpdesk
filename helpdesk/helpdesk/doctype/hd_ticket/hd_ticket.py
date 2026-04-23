@@ -288,12 +288,15 @@ class HDTicket(Document):
         """
         Auto-classify ticket to a billable party (ERPNext Customer) via:
         1. Contact's Dynamic Link → Customer
-        2. Sender email domain → Customer.email_domain (custom field)
+        2. Customer.portal_users manual assignment
+        3. Sender email domain → Customer.email_domain (custom field)
         """
         if self.party:
             return
         if not frappe.db.exists("DocType", "Customer"):
             return
+
+        email = parseaddr(self.raised_by or "")[1]
 
         # Path 1: Contact → Dynamic Link → Customer
         if self.contact:
@@ -310,8 +313,18 @@ class HDTicket(Document):
                 self.party = party
                 return
 
-        # Path 2: sender email domain → Customer.email_domain
-        email = parseaddr(self.raised_by or "")[1]
+        # Path 2: Customer.portal_users (manual user → customer mapping)
+        if email:
+            party = frappe.db.get_value(
+                "Portal User",
+                {"parenttype": "Customer", "user": email},
+                "parent",
+            )
+            if party:
+                self.party = party
+                return
+
+        # Path 3: sender email domain → Customer.email_domain
         if email and "@" in email:
             domain = email.split("@")[1].lower()
             party = frappe.db.get_value("Customer", {"email_domain": domain}, "name")

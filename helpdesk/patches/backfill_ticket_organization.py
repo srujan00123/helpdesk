@@ -7,7 +7,8 @@ def execute():
 
     Resolution order per ticket:
         1. Contact.Dynamic Link -> Customer
-        2. Sender email domain -> Customer.email_domain
+        2. Customer.portal_users manual mapping (raised_by email)
+        3. Sender email domain -> Customer.email_domain
     """
     if not frappe.db.has_column("HD Ticket", "party"):
         return
@@ -15,6 +16,7 @@ def execute():
         return
 
     _backfill_from_contact()
+    _backfill_from_portal_users()
     _backfill_from_email_domain()
 
 
@@ -29,6 +31,19 @@ def _backfill_from_contact():
         SET t.party = dl.link_name
         WHERE (t.party IS NULL OR t.party = '')
           AND t.contact IS NOT NULL
+        """
+    )
+
+
+def _backfill_from_portal_users():
+    frappe.db.sql(
+        """
+        UPDATE `tabHD Ticket` t
+        INNER JOIN `tabPortal User` pu
+            ON pu.parenttype = 'Customer'
+           AND pu.user = t.raised_by
+        SET t.party = pu.parent
+        WHERE (t.party IS NULL OR t.party = '')
         """
     )
 
