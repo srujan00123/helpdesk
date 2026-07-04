@@ -9,6 +9,7 @@
  "field_order": [
   "title",
   "status",
+  "visibility",
   "published_on",
   "views",
   "column_break_7",
@@ -16,7 +17,9 @@
   "author",
   "title_slug",
   "content_section",
-  "content"
+  "content",
+  "sb_visibility",
+  "visible_to"
  ],
  "fields": [
   {
@@ -75,6 +78,14 @@
    "options": "Published\nDraft\nArchived"
   },
   {
+   "default": "Public",
+   "fieldname": "visibility",
+   "fieldtype": "Select",
+   "label": "Visibility",
+   "options": "Public\nRestricted",
+   "reqd": 1
+  },
+  {
    "fieldname": "title_slug",
    "fieldtype": "Data",
    "is_virtual": 1,
@@ -86,6 +97,18 @@
    "fieldtype": "Int",
    "label": "Views",
    "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.visibility === 'Restricted'",
+   "fieldname": "sb_visibility",
+   "fieldtype": "Section Break",
+   "label": "Visible To Organizations"
+  },
+  {
+   "fieldname": "visible_to",
+   "fieldtype": "Table",
+   "label": "Visible To",
+   "options": "HD Article Organization"
   }
  ],
  "links": [],

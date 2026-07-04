@@ -230,6 +230,11 @@ const ticketAdditionalInfo = computed(() => {
       value: ticket.data.agent_group || "-",
     },
     {
+      fieldname: "party",
+      label: "Customer",
+      value: ticket.data.party || "-",
+    },
+    {
       fieldname: "priority",
       label: "Priority",
       value: ticket.data.priority,
@@ -239,7 +244,7 @@ const ticketAdditionalInfo = computed(() => {
     .filter(
       (field: Field) =>
         !field.hide_from_customer &&
-        ["subject", "team", "priority"].indexOf(field.fieldname) === -1
+        ["subject", "team", "priority", "party"].indexOf(field.fieldname) === -1
     )
     .map((field: Field) => {
       const option = {

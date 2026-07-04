@@ -37,7 +37,6 @@
           target="_blank"
         >
           <dt class="font-base">{{ a.subject }} - {{ a.headings }}</dt>
-          <!-- eslint-disable-next-line vue/no-v-html -->
           <dd
             class="font-base text-p-sm text-ink-gray-5 line-clamp-1"
             v-html="a.description"

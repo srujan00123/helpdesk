@@ -30,12 +30,18 @@ from helpdesk.utils import (
 
 
 @frappe.whitelist()
-# flake8: noqa
 def new(doc: dict, attachments: list[dict] = []):
+    """Create a new HD Ticket."""
     doc["doctype"] = "HD Ticket"
-    doc["via_customer_portal"] = bool(frappe.session.user)
+
+    # Detect if the user is a customer (not an agent) to set portal flag
+    doc["via_customer_portal"] = not is_agent()
     doc["attachments"] = attachments
     doc["raised_by"] = frappe.session.user
+
+    if not doc.get("subject"):
+        frappe.throw(_("Subject is required"))
+
     d = frappe.get_doc(doc).insert()
     return d
 
@@ -133,7 +139,7 @@ def get_one(name: str, is_customer_portal: bool = False):
 
 
 def get_meta(template: str):
-    default_fields = ["ticket_type", "agent_group", "priority", "customer"]
+    default_fields = ["ticket_type", "agent_group", "priority", "customer", "party"]
     DocField = frappe.qb.DocType("DocField")
 
     fields = (
@@ -161,7 +167,59 @@ def get_customer_criteria():
     customer = get_customers(user)
     for c in customer:
         conditions.append(QBTicket.customer == c)
+
+    # Also show tickets from the same billable customer (party)
+    for party in _get_user_parties(user):
+        conditions.append(QBTicket.party == party)
+
     return Criterion.any(conditions)
+
+
+def _get_user_parties(user: str) -> list[str]:
+    """Resolve ERPNext Customer(s) for a user via:
+    1. Contact → Dynamic Link → Customer
+    2. Customer.portal_users manual mapping
+    3. Email domain → Customer.email_domain
+    """
+    if not frappe.db.exists("DocType", "Customer"):
+        return []
+
+    parties = set()
+
+    contacts = frappe.get_all(
+        "Contact Email",
+        filters={"email_id": user, "parenttype": "Contact"},
+        pluck="parent",
+    )
+    if contacts:
+        customers = frappe.get_all(
+            "Dynamic Link",
+            filters={
+                "parenttype": "Contact",
+                "parent": ["in", contacts],
+                "link_doctype": "Customer",
+            },
+            pluck="link_name",
+        )
+        parties.update(customers)
+
+    # Path 2: manually mapped portal users on Customer.portal_users
+    portal_user_parties = frappe.get_all(
+        "Portal User",
+        filters={"parenttype": "Customer", "user": user},
+        pluck="parent",
+    )
+    parties.update(portal_user_parties)
+
+    if "@" in user:
+        domain = user.split("@")[1].lower()
+        domain_match = frappe.db.get_value(
+            "Customer", {"email_domain": domain}, "name"
+        )
+        if domain_match:
+            parties.add(domain_match)
+
+    return list(parties)
 
 
 def get_assignee(_assign: str):

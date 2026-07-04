@@ -86,6 +86,7 @@ class HDTicket(Document):
 
         self.set_contact()
         self.set_customer()
+        self.set_party()
 
     def validate(self):
         self.validate_feedback()
@@ -304,6 +305,53 @@ class HDTicket(Document):
                     ).format(self.contact),
                     frappe.ValidationError,
                 )
+
+    def set_party(self):
+        """
+        Auto-classify ticket to a billable party (ERPNext Customer) via:
+        1. Contact's Dynamic Link → Customer
+        2. Customer.portal_users manual assignment
+        3. Sender email domain → Customer.email_domain (custom field)
+        """
+        if self.party:
+            return
+        if not frappe.db.exists("DocType", "Customer"):
+            return
+
+        email = parseaddr(self.raised_by or "")[1]
+
+        # Path 1: Contact → Dynamic Link → Customer
+        if self.contact:
+            party = frappe.db.get_value(
+                "Dynamic Link",
+                {
+                    "parenttype": "Contact",
+                    "parent": self.contact,
+                    "link_doctype": "Customer",
+                },
+                "link_name",
+            )
+            if party:
+                self.party = party
+                return
+
+        # Path 2: Customer.portal_users (manual user → customer mapping)
+        if email:
+            party = frappe.db.get_value(
+                "Portal User",
+                {"parenttype": "Customer", "user": email},
+                "parent",
+            )
+            if party:
+                self.party = party
+                return
+
+        # Path 3: sender email domain → Customer.email_domain
+        if email and "@" in email:
+            domain = email.split("@")[1].lower()
+            party = frappe.db.get_value("Customer", {"email_domain": domain}, "name")
+            if party:
+                self.party = party
 
     def set_priority(self):
         if self.priority:
@@ -1053,6 +1101,13 @@ class HDTicket(Document):
                 "width": "10rem",
             },
             {
+                "label": "Customer",
+                "type": "Link",
+                "key": "party",
+                "options": "Customer",
+                "width": "10rem",
+            },
+            {
                 "label": "Contact",
                 "type": "Link",
                 "key": "contact",
@@ -1133,6 +1188,7 @@ class HDTicket(Document):
             "priority",
             "ticket_type",
             "agent_group",
+            "party",
             "contact",
             "agreement_status",
             "response_by",
@@ -1189,6 +1245,14 @@ def has_permission(doc, user=None):
         return True
     if _is_customer_manager(doc.customer, user):
         return True
+
+    # Allow access if user belongs to the same billable customer (party)
+    if doc.party:
+        from helpdesk.helpdesk.doctype.hd_ticket.api import _get_user_parties
+
+        if doc.party in _get_user_parties(user):
+            return True
+
     if not is_agent(user):
         return False
     return _agent_has_permission(doc, user)
@@ -1245,6 +1309,12 @@ def _customer_query(user: str) -> str:
     managed_customers = _get_managed_customers(user)
     if managed_customers:
         query += " OR " + _build_in_clause("customer", managed_customers)
+    # Include tickets from the user's billable customer accounts (party)
+    from helpdesk.helpdesk.doctype.hd_ticket.api import _get_user_parties
+
+    user_parties = _get_user_parties(user)
+    if user_parties:
+        query += " OR " + _build_in_clause("party", user_parties)
     return query
 
 
